@@ -2142,6 +2142,15 @@ describe('Bundled browser-skills frontmatter contract', () => {
     }
   });
 
+  test("each bundled skill's _lib carries the Factory QA transport and imports it", () => {
+    for (const dir of listBundledSkillDirs()) {
+      const sdk = fs.readFileSync(path.join(dir, '_lib', 'browse-client.ts'), 'utf-8');
+      expect(sdk).toContain("from './factory-qa-client'");
+      const transport = fs.readFileSync(path.join(dir, '_lib', 'factory-qa-client.ts'), 'utf-8');
+      expect(transport).toBe(fs.readFileSync(path.join(ROOT, 'browse', 'src', 'factory-qa-client.ts'), 'utf-8'));
+    }
+  });
+
   test('script.ts imports browse from ./_lib/browse-client', () => {
     for (const dir of listBundledSkillDirs()) {
       const content = fs.readFileSync(path.join(dir, 'script.ts'), 'utf-8');

@@ -10,7 +10,9 @@ import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { createServer, type Server } from 'node:net';
 import { BrowseClient, BrowseClientError, resolveBrowseAuth } from '../src/browse-client';
+import { FACTORY_QA_CAPABILITIES, FACTORY_QA_PROTOCOL_VERSION } from '../src/factory-qa-client';
 
 interface CapturedRequest {
   method: string;
@@ -25,6 +27,44 @@ interface MockServer {
   requests: CapturedRequest[];
   setResponse(status: number, body: string): void;
   stop(): Promise<void>;
+}
+
+let socketSequence = 0;
+const socketCleanup: string[] = [];
+
+async function startMockFactorySocket(): Promise<{
+  path: string;
+  requests: Record<string, unknown>[];
+  stop(): Promise<void>;
+}> {
+  const socketPath = path.join(os.tmpdir(), `browse-client-fqa-${process.pid}-${++socketSequence}.sock`);
+  socketCleanup.push(socketPath);
+  const requests: Record<string, unknown>[] = [];
+  const server: Server = createServer((socket) => {
+    let buffered = '';
+    socket.setEncoding('utf8');
+    socket.on('data', (chunk: string) => {
+      buffered += chunk;
+      const newline = buffered.indexOf('\n');
+      if (newline === -1) return;
+      const request = JSON.parse(buffered.slice(0, newline));
+      requests.push(request);
+      socket.write(`${JSON.stringify(request.op === 'status'
+        ? { schemaVersion: 1, id: request.id, ok: true, origin: 'http://127.0.0.1:4173', capabilities: [...FACTORY_QA_CAPABILITIES] }
+        : request.op === 'navigate'
+          ? { schemaVersion: 1, id: request.id, ok: true, url: request.url }
+          : { schemaVersion: 1, id: request.id, ok: true })}\n`);
+    });
+  });
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(socketPath, resolve);
+  });
+  return {
+    path: socketPath,
+    requests,
+    stop: () => new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve())),
+  };
 }
 
 async function startMockServer(): Promise<MockServer> {
@@ -63,7 +103,8 @@ describe('browse-client', () => {
   beforeEach(async () => {
     server = await startMockServer();
     // Snapshot env we mutate so tests are hermetic.
-    for (const k of ['GSTACK_PORT', 'GSTACK_SKILL_TOKEN', 'BROWSE_STATE_FILE', 'BROWSE_TAB']) {
+    for (const k of ['GSTACK_PORT', 'GSTACK_SKILL_TOKEN', 'BROWSE_STATE_FILE', 'BROWSE_TAB',
+      'FACTORY_QA_BROWSE_SOCKET', 'FACTORY_QA_TOKEN', 'FACTORY_QA_ORIGIN']) {
       origEnv[k] = process.env[k];
       delete process.env[k];
     }
@@ -71,6 +112,7 @@ describe('browse-client', () => {
 
   afterEach(async () => {
     await server.stop();
+    for (const target of socketCleanup.splice(0)) fs.rmSync(target, { force: true });
     for (const [k, v] of Object.entries(origEnv)) {
       if (v === undefined) delete process.env[k];
       else process.env[k] = v;
@@ -295,6 +337,42 @@ describe('browse-client', () => {
       await client.data('--jsonld');
       expect(server.requests[0].body).toEqual({ command: 'media', args: ['--images'] });
       expect(server.requests[1].body).toEqual({ command: 'data', args: ['--jsonld'] });
+    });
+  });
+
+  describe('Factory QA mode', () => {
+    it('routes commands over the Unix socket with zero HTTP requests', async () => {
+      const factory = await startMockFactorySocket();
+      process.env.FACTORY_QA_BROWSE_SOCKET = factory.path;
+      process.env.FACTORY_QA_TOKEN = 'factory-secret-token';
+      process.env.FACTORY_QA_ORIGIN = 'http://127.0.0.1:4173';
+      process.env.GSTACK_PORT = String(server.port);
+      process.env.GSTACK_SKILL_TOKEN = 'scoped-token';
+
+      const client = new BrowseClient();
+      const out = await client.command('goto', ['http://127.0.0.1:4173/settings']);
+
+      expect(out).toContain('Navigated to http://127.0.0.1:4173/settings');
+      expect(factory.requests).toEqual([{
+        schemaVersion: FACTORY_QA_PROTOCOL_VERSION,
+        id: 1,
+        token: 'factory-secret-token',
+        op: 'navigate',
+        url: 'http://127.0.0.1:4173/settings',
+      }]);
+      expect(server.requests).toHaveLength(0);
+    });
+
+    it('fails closed on partial Factory activation', () => {
+      process.env.FACTORY_QA_TOKEN = 'factory-secret-token';
+      expect(() => new BrowseClient()).toThrow('Factory QA configuration is incomplete');
+    });
+
+    it('rejects HTTP daemon options in Factory mode', () => {
+      process.env.FACTORY_QA_BROWSE_SOCKET = '/tmp/browse-client-fqa.sock';
+      process.env.FACTORY_QA_TOKEN = 'factory-secret-token';
+      process.env.FACTORY_QA_ORIGIN = 'http://127.0.0.1:4173';
+      expect(() => new BrowseClient({ port: 9999, token: 't' })).toThrow('incompatible with Factory QA mode');
     });
   });
 });

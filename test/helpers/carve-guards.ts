@@ -605,7 +605,7 @@ export const CARVE_GUARDS: Record<string, CarveGuard> = {
       gateAfterStop: undefined,
     },
     behavioral: 'prompt',
-    maxSkeletonBytes: 50_800, // ponytail-import wave: reuse ladder + bounded closer + shortcut trail (AUQ repetition cut netted -236B, gated); measured 50_194
+    maxSkeletonBytes: 52_900, // factory-qa wave: {{FACTORY_QA_SETUP}} fail-closed transport block stays in skeleton (measured 52_424); ponytail-import wave previously measured 50_194
     minUnionBytes: 69_500, // measured union 70,385
     mustContain: ['bug', 'browse', 'fix', 'Health Score Rubric', 'regression'],
   },

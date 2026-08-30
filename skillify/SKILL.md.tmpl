@@ -243,11 +243,17 @@ function resolveSdkPath(): string {
 }
 
 const sdkContents = fs.readFileSync(resolveSdkPath(), 'utf-8');
+const factoryTransport = fs.readFileSync(
+  resolveSdkPath().replace(/browse-client\.ts$/, 'factory-qa-client.ts'),
+  'utf-8',
+);
 ```
 
 Read the SDK contents into a variable. The staging step writes it as
-`_lib/browse-client.ts` byte-identical to the canonical. Phase 1 decision
-#4 — each skill is fully self-contained, no version drift possible.
+`_lib/browse-client.ts` byte-identical to the canonical, alongside the
+Factory QA transport at `_lib/factory-qa-client.ts` (also byte-identical).
+Phase 1 decision #4 — each skill is fully self-contained, no version drift
+possible.
 
 ## Step 7 — Stage the skill (D3 atomic write)
 
@@ -264,6 +270,7 @@ const stagedDir = stageSkill({
     ['script.ts', scriptTs],
     ['script.test.ts', scriptTestTs],
     ['_lib/browse-client.ts', sdkContents],
+    ['_lib/factory-qa-client.ts', factoryTransport],
     ['fixtures/<host>-<date>.html', fixtureHtml],
   ]),
 });

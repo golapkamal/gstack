@@ -122,7 +122,7 @@ This is the **primary mode** for developers verifying their work. When the user 
 
    **If no obvious pages/routes are identified from the diff:** Do not skip browser testing. The user invoked /qa because they want browser-based verification. Fall back to Quick mode — navigate to the homepage, follow the top 5 navigation targets, check console for errors, and test any interactive elements found. Backend, config, and infrastructure changes affect app behavior — always verify the app still works.
 
-3. **Detect the running app** — check common local dev ports:
+3. **Detect the running app.** In Factory QA mode, the app is already running at exactly \`$FACTORY_QA_ORIGIN\`: use that URL and skip every port/staging probe. Otherwise, check common local dev ports:
    \`\`\`bash
    $B goto http://localhost:3000 2>/dev/null && echo "Found app on :3000" || \\
    $B goto http://localhost:4000 2>/dev/null && echo "Found app on :4000" || \\
@@ -169,6 +169,8 @@ Run full mode, then load \`baseline.json\` from a previous run. Diff: which issu
 4. Start timer for duration tracking
 
 ### Phase 2: Authenticate (if needed)
+
+**Factory QA mode:** Authentication, when declared, was proven by the reviewed capsule adapter before the agent started. Never enter credentials, import cookies, or switch browser transports. If the required authenticated state is absent, report a Factory QA environment incompatibility and stop.
 
 **If the user specified auth credentials:**
 
@@ -376,7 +378,8 @@ Minimum 0 per category.
 9. **Never delete output files.** Screenshots and reports accumulate — that's intentional.
 10. **Use \`snapshot -C\` for tricky UIs.** Finds clickable divs that the accessibility tree misses.
 11. **Show screenshots to the user.** After every \`$B screenshot\`, \`$B snapshot -a -o\`, or \`$B responsive\` command, use the Read tool on the output file(s) so the user can see them inline. For \`responsive\` (3 files), Read all three. This is critical — without it, screenshots are invisible to the user.
-12. **Never refuse to use the browser.** When the user invokes /qa or /qa-only, they are requesting browser-based testing. Never suggest evals, unit tests, or other alternatives as a substitute. Even if the diff appears to have no UI changes, backend changes affect app behavior — always open the browser and test.`;
+12. **Never refuse to use the browser.** When the user invokes /qa or /qa-only, they are requesting browser-based testing. Never suggest evals, unit tests, or other alternatives as a substitute. Even if the diff appears to have no UI changes, backend changes affect app behavior — always open the browser and test.
+13. **Factory transport stays sealed.** When all three \`FACTORY_QA_*\` variables are present, use \`$FACTORY_QA_ORIGIN\` and the Unix-socket-backed \`$B\` only. An unsupported operation is an incompatibility to report, never permission to start or reuse another browser.`;
 }
 
 export function generateCoAuthorTrailer(ctx: TemplateContext): string {

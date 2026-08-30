@@ -510,9 +510,40 @@ sections. Read a section in full before doing its step; do not work from memory.
 
 **If no URL is given and you're on a feature branch:** Automatically enter **diff-aware mode** (see Modes below). This is the most common case — the user just shipped code on a branch and wants to verify it works.
 
+**Detect Factory QA transport before any browser or CDP probe:**
+
+```bash
+_factory_qa_present=0
+[ "${FACTORY_QA_BROWSE_SOCKET+x}" = x ] && _factory_qa_present=$((_factory_qa_present + 1))
+[ "${FACTORY_QA_TOKEN+x}" = x ] && _factory_qa_present=$((_factory_qa_present + 1))
+[ "${FACTORY_QA_ORIGIN+x}" = x ] && _factory_qa_present=$((_factory_qa_present + 1))
+if [ "$_factory_qa_present" -eq 0 ]; then
+  echo "FACTORY_QA_MODE=false"
+elif [ "$_factory_qa_present" -ne 3 ] || [ -z "$FACTORY_QA_BROWSE_SOCKET" ] || [ -z "$FACTORY_QA_TOKEN" ] || [ -z "$FACTORY_QA_ORIGIN" ]; then
+  echo "ERROR: Factory QA requires all three non-empty FACTORY_QA_* variables" >&2
+  exit 1
+else
+  echo "FACTORY_QA_MODE=true"
+  echo "FACTORY_QA_ORIGIN=$FACTORY_QA_ORIGIN"
+fi
+```
+
+If `FACTORY_QA_MODE=true`:
+- Activation is all-or-none. Set all three FACTORY_QA_* variables or none; partial or empty configuration is an error.
+- The target is exactly `$FACTORY_QA_ORIGIN`. Ignore supplied or discovered off-origin URLs; navigation is origin-pinned.
+- `$B` uses only the attempt-scoped Unix socket. Never probe ports, reuse/start the ordinary browse daemon, connect a headed/CDP browser, or import cookies.
+- Protocol v1 supports `status`, `goto`, `screenshot`, `js`/`eval`, `snapshot`, `links`, `click`, `fill`, `select`, `press`, `hover`, `console`, `viewport`, and bounded `wait`. Use controller-issued `@e`/`@c` refs from `snapshot` for interactions.
+- Any other command or flag is an explicit incompatibility. Never retry it through another browser transport.
+- Screenshots are written to controller-owned capsule artifacts. The requested path supplies only the safe basename; use the actual path printed by `$B` for Read/report evidence.
+- Never print, log, or include `FACTORY_QA_TOKEN` in commands, reports, errors, or artifacts.
+
 **CDP mode detection:** Before starting, check if the browse server is connected to the user's real browser:
 ```bash
-$B status 2>/dev/null | grep -q "Mode: cdp" && echo "CDP_MODE=true" || echo "CDP_MODE=false"
+if [ -n "${FACTORY_QA_BROWSE_SOCKET:-}" ]; then
+  echo "CDP_MODE=false (Factory capsule)"
+else
+  $B status 2>/dev/null | grep -q "Mode: cdp" && echo "CDP_MODE=true" || echo "CDP_MODE=false"
+fi
 ```
 If `CDP_MODE=true`: skip cookie import prompts (the real browser already has cookies), skip user-agent overrides (real browser has real user-agent), and skip headless detection workarounds. The user's real auth sessions are already available.
 

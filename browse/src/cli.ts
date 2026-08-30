@@ -21,6 +21,7 @@ import { spawnTerminalAgent } from './terminal-agent-control';
 // Zero side effects on import (documented invariant in token-registry.ts) —
 // safe to pull the shared pairing default into the CLI.
 import { DEFAULT_PAIR_SCOPES } from './token-registry';
+import { FactoryQaBrowseClient, resolveFactoryQaConfig } from './factory-qa-client';
 
 const config = resolveConfig();
 const IS_WINDOWS = process.platform === 'win32';
@@ -1445,6 +1446,29 @@ async function handlePairAgent(state: ServerState, args: string[]): Promise<void
 // ─── Main ──────────────────────────────────────────────────────
 async function main() {
   const rawArgs = process.argv.slice(2);
+
+  // Factory assurance owns browser lifecycle. Resolve this before flags, state
+  // cleanup, health probes, or any pre-server command so full activation has
+  // exactly one transport and partial activation fails closed.
+  const factoryQa = resolveFactoryQaConfig(process.env);
+  if (factoryQa) {
+    if (rawArgs.length === 0 || rawArgs[0] === '--help' || rawArgs[0] === '-h') {
+      console.log(`gstack browse — Factory QA protocol v1
+
+Usage: browse <command> [args...]
+
+Supported: status | goto | screenshot | js | eval | snapshot | links
+           click | fill | select | press | hover | console | viewport | wait
+
+Factory mode uses only FACTORY_QA_BROWSE_SOCKET. Unsupported commands fail
+explicitly; the ordinary HTTP browse daemon is never probed or started.`);
+      return;
+    }
+    const result = await new FactoryQaBrowseClient(factoryQa).command(rawArgs[0]!, rawArgs.slice(1));
+    process.stdout.write(result);
+    if (!result.endsWith('\n')) process.stdout.write('\n');
+    return;
+  }
 
   // ─── Global flags (--proxy, --headed) ───────────────────────
   // Extract before command dispatch so they apply to any command. Throws

@@ -1,0 +1,91 @@
+{
+  "schemaVersion": 1,
+  "origin": "http://127.0.0.1:4173",
+  "token": "fixture-agent-token",
+  "cases": [
+    {
+      "name": "status",
+      "command": ["status"],
+      "request": { "schemaVersion": 1, "id": 1, "token": "fixture-agent-token", "op": "status" },
+      "response": { "schemaVersion": 1, "id": 1, "ok": true, "origin": "http://127.0.0.1:4173", "capabilities": ["status", "navigate", "screenshot", "eval", "snapshot", "click", "fill", "select", "press", "hover", "console", "viewport", "wait"] }
+    },
+    {
+      "name": "navigate",
+      "command": ["goto", "/settings"],
+      "request": { "schemaVersion": 1, "id": 1, "token": "fixture-agent-token", "op": "navigate", "url": "http://127.0.0.1:4173/settings" },
+      "response": { "schemaVersion": 1, "id": 1, "ok": true, "url": "http://127.0.0.1:4173/settings" }
+    },
+    {
+      "name": "screenshot",
+      "command": ["screenshot", "/tmp/overview.png"],
+      "request": { "schemaVersion": 1, "id": 1, "token": "fixture-agent-token", "op": "screenshot", "name": "overview" },
+      "response": { "schemaVersion": 1, "id": 1, "ok": true, "path": "/attempt/qa-capsule/artifacts/overview.png", "bytes": 1200 }
+    },
+    {
+      "name": "eval",
+      "command": ["js", "document.title"],
+      "request": { "schemaVersion": 1, "id": 1, "token": "fixture-agent-token", "op": "eval", "expression": "document.title", "awaitPromise": true },
+      "response": { "schemaVersion": 1, "id": 1, "ok": true, "value": "Factory fixture" }
+    },
+    {
+      "name": "snapshot",
+      "command": ["snapshot", "-i", "-c", "-d", "3", "-D", "-a", "-o", "/tmp/annotated.png"],
+      "request": { "schemaVersion": 1, "id": 1, "token": "fixture-agent-token", "op": "snapshot", "options": { "interactiveOnly": true, "compact": true, "diff": true, "cursorInteractive": false, "includeLinks": false, "depth": 3, "annotate": { "name": "annotated" } } },
+      "response": { "schemaVersion": 1, "id": 1, "ok": true, "tree": "@e1 [link] Settings\n@e2 [button] Save", "refs": [{ "ref": "@e1", "role": "link", "name": "Settings" }, { "ref": "@e2", "role": "button", "name": "Save" }], "links": [{ "ref": "@e1", "text": "Settings", "href": "http://127.0.0.1:4173/settings" }], "screenshot": { "path": "/attempt/qa-capsule/artifacts/annotated.png", "bytes": 1400 } }
+    },
+    {
+      "name": "links-via-snapshot",
+      "command": ["links"],
+      "request": { "schemaVersion": 1, "id": 1, "token": "fixture-agent-token", "op": "snapshot", "options": { "interactiveOnly": false, "compact": true, "diff": false, "cursorInteractive": false, "includeLinks": true } },
+      "response": { "schemaVersion": 1, "id": 1, "ok": true, "tree": "@e1 [link] Settings", "refs": [{ "ref": "@e1", "role": "link", "name": "Settings" }], "links": [{ "ref": "@e1", "text": "Settings", "href": "http://127.0.0.1:4173/settings" }] }
+    },
+    {
+      "name": "click",
+      "command": ["click", "@e2"],
+      "request": { "schemaVersion": 1, "id": 1, "token": "fixture-agent-token", "op": "click", "ref": "@e2" },
+      "response": { "schemaVersion": 1, "id": 1, "ok": true }
+    },
+    {
+      "name": "fill",
+      "command": ["fill", "@e3", "Ada"],
+      "request": { "schemaVersion": 1, "id": 1, "token": "fixture-agent-token", "op": "fill", "ref": "@e3", "value": "Ada" },
+      "response": { "schemaVersion": 1, "id": 1, "ok": true }
+    },
+    {
+      "name": "select",
+      "command": ["select", "@e4", "pro"],
+      "request": { "schemaVersion": 1, "id": 1, "token": "fixture-agent-token", "op": "select", "ref": "@e4", "value": "pro" },
+      "response": { "schemaVersion": 1, "id": 1, "ok": true }
+    },
+    {
+      "name": "press",
+      "command": ["press", "Enter"],
+      "request": { "schemaVersion": 1, "id": 1, "token": "fixture-agent-token", "op": "press", "key": "Enter" },
+      "response": { "schemaVersion": 1, "id": 1, "ok": true }
+    },
+    {
+      "name": "hover",
+      "command": ["hover", "@e5"],
+      "request": { "schemaVersion": 1, "id": 1, "token": "fixture-agent-token", "op": "hover", "ref": "@e5" },
+      "response": { "schemaVersion": 1, "id": 1, "ok": true }
+    },
+    {
+      "name": "console",
+      "command": ["console", "--errors"],
+      "request": { "schemaVersion": 1, "id": 1, "token": "fixture-agent-token", "op": "console", "errorsOnly": true, "clear": false },
+      "response": { "schemaVersion": 1, "id": 1, "ok": true, "messages": [{ "level": "error", "text": "fixture failure" }] }
+    },
+    {
+      "name": "viewport",
+      "command": ["viewport", "375x812", "--scale", "2"],
+      "request": { "schemaVersion": 1, "id": 1, "token": "fixture-agent-token", "op": "viewport", "width": 375, "height": 812, "deviceScaleFactor": 2 },
+      "response": { "schemaVersion": 1, "id": 1, "ok": true, "width": 375, "height": 812, "deviceScaleFactor": 2 }
+    },
+    {
+      "name": "wait",
+      "command": ["wait", "--networkidle"],
+      "request": { "schemaVersion": 1, "id": 1, "token": "fixture-agent-token", "op": "wait", "condition": "networkidle", "timeoutMs": 15000 },
+      "response": { "schemaVersion": 1, "id": 1, "ok": true, "condition": "networkidle", "elapsedMs": 20 }
+    }
+  ]
+}

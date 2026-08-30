@@ -601,6 +601,21 @@ describe('gen-skill-docs', () => {
     expect(qaOnlyContent).toContain('Phase 6');
   });
 
+  test('qa and qa-only generate the fail-closed Factory QA transport contract', () => {
+    const qaTemplate = fs.readFileSync(path.join(ROOT, 'qa', 'SKILL.md.tmpl'), 'utf-8');
+    const qaOnlyTemplate = fs.readFileSync(path.join(ROOT, 'qa-only', 'SKILL.md.tmpl'), 'utf-8');
+    expect(qaTemplate).toContain('{{FACTORY_QA_SETUP}}');
+    expect(qaOnlyTemplate).toContain('{{FACTORY_QA_SETUP}}');
+
+    for (const content of [readSkillUnion('qa'), fs.readFileSync(path.join(ROOT, 'qa-only', 'SKILL.md'), 'utf-8')]) {
+      expect(content).toContain('Set all three FACTORY_QA_* variables or none');
+      expect(content).toContain('Never probe ports, reuse/start the ordinary browse daemon');
+      expect(content).toContain('use the actual path printed by `$B`');
+      expect(content).toContain('Never print, log, or include `FACTORY_QA_TOKEN`');
+      expect(content).toContain('An unsupported operation is an incompatibility to report');
+    }
+  });
+
   test('qa-only has no-fix guardrails', () => {
     const qaOnlyContent = fs.readFileSync(path.join(ROOT, 'qa-only', 'SKILL.md'), 'utf-8');
     expect(qaOnlyContent).toContain('Never fix bugs');

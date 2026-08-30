@@ -1,0 +1,334 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/garrytan/gstack/blob/main/browse/protocol/factory-qa-v1.schema.json",
+  "title": "gstack Factory QA protocol v1",
+  "description": "One newline-delimited request and response per attempt-scoped Unix-socket exchange. Element refs are controller-issued and invalidated by navigation.",
+  "oneOf": [
+    { "$ref": "#/$defs/request" },
+    { "$ref": "#/$defs/response" }
+  ],
+  "$defs": {
+    "id": { "type": "integer", "minimum": 1 },
+    "ref": { "type": "string", "pattern": "^@[ec][1-9][0-9]*$" },
+    "artifactName": { "type": "string", "pattern": "^[A-Za-z0-9._-]{1,64}$" },
+    "request": {
+      "oneOf": [
+        { "$ref": "#/$defs/statusRequest" },
+        { "$ref": "#/$defs/navigateRequest" },
+        { "$ref": "#/$defs/screenshotRequest" },
+        { "$ref": "#/$defs/evalRequest" },
+        { "$ref": "#/$defs/snapshotRequest" },
+        { "$ref": "#/$defs/clickRequest" },
+        { "$ref": "#/$defs/fillRequest" },
+        { "$ref": "#/$defs/selectRequest" },
+        { "$ref": "#/$defs/pressRequest" },
+        { "$ref": "#/$defs/hoverRequest" },
+        { "$ref": "#/$defs/consoleRequest" },
+        { "$ref": "#/$defs/viewportRequest" },
+        { "$ref": "#/$defs/waitRequest" }
+      ]
+    },
+    "response": {
+      "oneOf": [
+        { "$ref": "#/$defs/errorResponse" },
+        { "$ref": "#/$defs/statusResponse" },
+        { "$ref": "#/$defs/navigateResponse" },
+        { "$ref": "#/$defs/screenshotResponse" },
+        { "$ref": "#/$defs/evalResponse" },
+        { "$ref": "#/$defs/snapshotResponse" },
+        { "$ref": "#/$defs/emptySuccessResponse" },
+        { "$ref": "#/$defs/consoleResponse" },
+        { "$ref": "#/$defs/viewportResponse" },
+        { "$ref": "#/$defs/waitResponse" }
+      ]
+    },
+    "statusRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "id", "token", "op"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "id": { "$ref": "#/$defs/id" },
+        "token": { "type": "string", "minLength": 1 },
+        "op": { "const": "status" }
+      }
+    },
+    "navigateRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "id", "token", "op", "url"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "id": { "$ref": "#/$defs/id" },
+        "token": { "type": "string", "minLength": 1 },
+        "op": { "const": "navigate" },
+        "url": { "type": "string", "format": "uri" }
+      }
+    },
+    "screenshotRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "id", "token", "op", "name"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "id": { "$ref": "#/$defs/id" },
+        "token": { "type": "string", "minLength": 1 },
+        "op": { "const": "screenshot" },
+        "name": { "$ref": "#/$defs/artifactName" }
+      }
+    },
+    "evalRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "id", "token", "op", "expression", "awaitPromise"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "id": { "$ref": "#/$defs/id" },
+        "token": { "type": "string", "minLength": 1 },
+        "op": { "const": "eval" },
+        "expression": { "type": "string", "maxLength": 4000 },
+        "awaitPromise": { "const": true }
+      }
+    },
+    "snapshotRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "id", "token", "op", "options"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "id": { "$ref": "#/$defs/id" },
+        "token": { "type": "string", "minLength": 1 },
+        "op": { "const": "snapshot" },
+        "options": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["interactiveOnly", "compact", "diff", "cursorInteractive", "includeLinks"],
+          "properties": {
+            "interactiveOnly": { "type": "boolean" },
+            "compact": { "type": "boolean" },
+            "diff": { "type": "boolean" },
+            "cursorInteractive": { "type": "boolean" },
+            "includeLinks": { "type": "boolean" },
+            "depth": { "type": "integer", "minimum": 0 },
+            "annotate": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["name"],
+              "properties": { "name": { "$ref": "#/$defs/artifactName" } }
+            }
+          }
+        }
+      }
+    },
+    "clickRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "id", "token", "op", "ref"],
+      "properties": {
+        "schemaVersion": { "const": 1 }, "id": { "$ref": "#/$defs/id" },
+        "token": { "type": "string", "minLength": 1 }, "op": { "const": "click" },
+        "ref": { "$ref": "#/$defs/ref" }
+      }
+    },
+    "fillRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "id", "token", "op", "ref", "value"],
+      "properties": {
+        "schemaVersion": { "const": 1 }, "id": { "$ref": "#/$defs/id" },
+        "token": { "type": "string", "minLength": 1 }, "op": { "const": "fill" },
+        "ref": { "$ref": "#/$defs/ref" }, "value": { "type": "string" }
+      }
+    },
+    "selectRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "id", "token", "op", "ref", "value"],
+      "properties": {
+        "schemaVersion": { "const": 1 }, "id": { "$ref": "#/$defs/id" },
+        "token": { "type": "string", "minLength": 1 }, "op": { "const": "select" },
+        "ref": { "$ref": "#/$defs/ref" }, "value": { "type": "string" }
+      }
+    },
+    "pressRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "id", "token", "op", "key"],
+      "properties": {
+        "schemaVersion": { "const": 1 }, "id": { "$ref": "#/$defs/id" },
+        "token": { "type": "string", "minLength": 1 }, "op": { "const": "press" },
+        "key": { "type": "string", "minLength": 1 }
+      }
+    },
+    "hoverRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "id", "token", "op", "ref"],
+      "properties": {
+        "schemaVersion": { "const": 1 }, "id": { "$ref": "#/$defs/id" },
+        "token": { "type": "string", "minLength": 1 }, "op": { "const": "hover" },
+        "ref": { "$ref": "#/$defs/ref" }
+      }
+    },
+    "consoleRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "id", "token", "op", "errorsOnly", "clear"],
+      "properties": {
+        "schemaVersion": { "const": 1 }, "id": { "$ref": "#/$defs/id" },
+        "token": { "type": "string", "minLength": 1 }, "op": { "const": "console" },
+        "errorsOnly": { "type": "boolean" }, "clear": { "type": "boolean" }
+      }
+    },
+    "viewportRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "id", "token", "op", "width", "height", "deviceScaleFactor"],
+      "properties": {
+        "schemaVersion": { "const": 1 }, "id": { "$ref": "#/$defs/id" },
+        "token": { "type": "string", "minLength": 1 }, "op": { "const": "viewport" },
+        "width": { "type": "integer", "minimum": 1, "maximum": 10000 },
+        "height": { "type": "integer", "minimum": 1, "maximum": 10000 },
+        "deviceScaleFactor": { "type": "number", "minimum": 1, "maximum": 3 }
+      }
+    },
+    "waitRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "id", "token", "op", "condition", "timeoutMs"],
+      "properties": {
+        "schemaVersion": { "const": 1 }, "id": { "$ref": "#/$defs/id" },
+        "token": { "type": "string", "minLength": 1 }, "op": { "const": "wait" },
+        "condition": { "enum": ["load", "networkidle", "ref", "selector"] },
+        "timeoutMs": { "type": "integer", "minimum": 1, "maximum": 15000 },
+        "ref": { "$ref": "#/$defs/ref" },
+        "selector": { "type": "string", "minLength": 1, "maxLength": 1000 }
+      },
+      "allOf": [
+        { "if": { "properties": { "condition": { "const": "ref" } } }, "then": { "required": ["ref"] } },
+        { "if": { "properties": { "condition": { "const": "selector" } } }, "then": { "required": ["selector"] } }
+      ]
+    },
+    "errorResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "id", "ok", "error"],
+      "properties": {
+        "schemaVersion": { "const": 1 }, "id": { "$ref": "#/$defs/id" }, "ok": { "const": false },
+        "error": {
+          "type": "object", "additionalProperties": false, "required": ["code", "message"],
+          "properties": {
+            "code": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+            "message": { "type": "string", "minLength": 1, "maxLength": 1000 }
+          }
+        }
+      }
+    },
+    "statusResponse": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schemaVersion", "id", "ok", "origin", "capabilities"],
+      "properties": {
+        "schemaVersion": { "const": 1 }, "id": { "$ref": "#/$defs/id" }, "ok": { "const": true },
+        "origin": { "type": "string", "format": "uri" },
+        "capabilities": {
+          "type": "array", "minItems": 13, "maxItems": 13, "uniqueItems": true,
+          "items": { "enum": ["status", "navigate", "screenshot", "eval", "snapshot", "click", "fill", "select", "press", "hover", "console", "viewport", "wait"] }
+        }
+      }
+    },
+    "navigateResponse": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schemaVersion", "id", "ok", "url"],
+      "properties": {
+        "schemaVersion": { "const": 1 }, "id": { "$ref": "#/$defs/id" }, "ok": { "const": true },
+        "url": { "type": "string", "format": "uri" }
+      }
+    },
+    "screenshotResult": {
+      "type": "object", "additionalProperties": false, "required": ["path", "bytes"],
+      "properties": { "path": { "type": "string", "minLength": 1 }, "bytes": { "type": "integer", "minimum": 0 } }
+    },
+    "screenshotResponse": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schemaVersion", "id", "ok", "path", "bytes"],
+      "properties": {
+        "schemaVersion": { "const": 1 }, "id": { "$ref": "#/$defs/id" }, "ok": { "const": true },
+        "path": { "type": "string", "minLength": 1 }, "bytes": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "evalResponse": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schemaVersion", "id", "ok", "value"],
+      "properties": {
+        "schemaVersion": { "const": 1 }, "id": { "$ref": "#/$defs/id" }, "ok": { "const": true },
+        "value": { "type": "string", "maxLength": 16000 }
+      }
+    },
+    "snapshotResponse": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schemaVersion", "id", "ok", "tree", "refs", "links"],
+      "properties": {
+        "schemaVersion": { "const": 1 }, "id": { "$ref": "#/$defs/id" }, "ok": { "const": true },
+        "tree": { "type": "string" },
+        "refs": {
+          "type": "array",
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["ref", "role", "name"],
+            "properties": {
+              "ref": { "$ref": "#/$defs/ref" }, "role": { "type": "string" }, "name": { "type": "string" }
+            }
+          }
+        },
+        "links": {
+          "type": "array",
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["ref", "text", "href"],
+            "properties": {
+              "ref": { "$ref": "#/$defs/ref" }, "text": { "type": "string" }, "href": { "type": "string" }
+            }
+          }
+        },
+        "screenshot": { "$ref": "#/$defs/screenshotResult" }
+      }
+    },
+    "emptySuccessResponse": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schemaVersion", "id", "ok"],
+      "properties": { "schemaVersion": { "const": 1 }, "id": { "$ref": "#/$defs/id" }, "ok": { "const": true } }
+    },
+    "consoleResponse": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schemaVersion", "id", "ok", "messages"],
+      "properties": {
+        "schemaVersion": { "const": 1 }, "id": { "$ref": "#/$defs/id" }, "ok": { "const": true },
+        "messages": {
+          "type": "array",
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["level", "text"],
+            "properties": {
+              "level": { "enum": ["debug", "log", "info", "warning", "error"] },
+              "text": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "viewportResponse": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schemaVersion", "id", "ok", "width", "height", "deviceScaleFactor"],
+      "properties": {
+        "schemaVersion": { "const": 1 }, "id": { "$ref": "#/$defs/id" }, "ok": { "const": true },
+        "width": { "type": "integer" }, "height": { "type": "integer" }, "deviceScaleFactor": { "type": "number" }
+      }
+    },
+    "waitResponse": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schemaVersion", "id", "ok", "condition", "elapsedMs"],
+      "properties": {
+        "schemaVersion": { "const": 1 }, "id": { "$ref": "#/$defs/id" }, "ok": { "const": true },
+        "condition": { "enum": ["load", "networkidle", "ref", "selector"] },
+        "elapsedMs": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

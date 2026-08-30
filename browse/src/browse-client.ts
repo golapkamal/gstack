@@ -1,6 +1,6 @@
 /**
  * browse-client — canonical SDK that browser-skill scripts import to drive the
- * gstack daemon over loopback HTTP.
+ * gstack browser over loopback HTTP or the sealed Factory QA Unix socket.
  *
  * Distribution model:
  *   This file is the canonical source. Each browser-skill ships a sibling
@@ -34,6 +34,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as cp from 'child_process';
+import { FactoryQaBrowseClient, resolveFactoryQaConfig } from './factory-qa-client';
 
 export interface BrowseClientOptions {
   /** Override port. Default: GSTACK_PORT env or state file. */
@@ -130,12 +131,24 @@ export class BrowseClientError extends Error {
  * etc.). For anything not exposed as a method, use `command(cmd, args)`.
  */
 export class BrowseClient {
-  readonly port: number;
+  readonly port?: number;
   readonly token: string;
   readonly tabId?: number;
   readonly timeoutMs: number;
+  private readonly factory?: FactoryQaBrowseClient;
 
   constructor(opts: BrowseClientOptions = {}) {
+    const factoryConfig = resolveFactoryQaConfig(process.env);
+    if (factoryConfig) {
+      if (opts.port !== undefined || opts.token !== undefined || opts.tabId !== undefined || opts.stateFile !== undefined) {
+        throw new BrowseClientError('browse-client: HTTP daemon options are incompatible with Factory QA mode');
+      }
+      factoryConfig.timeoutMs = opts.timeoutMs;
+      this.factory = new FactoryQaBrowseClient(factoryConfig);
+      this.token = '';
+      this.timeoutMs = opts.timeoutMs ?? 30_000;
+      return;
+    }
     const auth = resolveBrowseAuth(opts);
     this.port = auth.port;
     this.token = auth.token;
@@ -145,8 +158,15 @@ export class BrowseClient {
 
   // ─── Low-level dispatch ─────────────────────────────────────────
 
-  /** Send an arbitrary command; returns raw response text. Throws on non-2xx. */
+  /** Send an arbitrary command; returns raw response text. Throws on failure. */
   async command(cmd: string, args: string[] = []): Promise<string> {
+    if (this.factory) {
+      try {
+        return await this.factory.command(cmd, args);
+      } catch (error) {
+        throw new BrowseClientError(`browse-client: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
     const body = JSON.stringify({
       command: cmd,
       args,
