@@ -139,7 +139,7 @@ const EXTERNAL_OUT = fs.mkdtempSync(path.join(os.tmpdir(), 'gstack-gen-docs-out-
 {
   const render = Bun.spawnSync(
     ['bun', 'run', 'scripts/gen-skill-docs.ts', '--host', 'all', '--out-dir', EXTERNAL_OUT],
-    { cwd: ROOT, stdout: 'pipe', stderr: 'pipe' },
+    { cwd: ROOT, stdout: 'pipe', stderr: 'pipe', timeout: 120_000 },
   );
   if (render.exitCode !== 0) {
     throw new Error(
@@ -315,6 +315,7 @@ describe('gen-skill-docs', () => {
       cwd: ROOT,
       stdout: 'pipe',
       stderr: 'pipe',
+      timeout: 120_000,
     });
     expect(result.exitCode).toBe(0);
     const output = result.stdout.toString();
@@ -1980,7 +1981,7 @@ describe('Codex generation (--host codex)', () => {
       '/tmp/gstack-claude-error-XXXXXX',
       '/tmp/gstack-claude-diff-XXXXXX',
     ]) {
-      const result = spawnSync('mktemp', [template], { encoding: 'utf-8' });
+      const result = spawnSync('mktemp', [template], { encoding: 'utf-8', timeout: 30_000 });
       expect(result.status).toBe(0);
       const created = result.stdout.trim();
       expect(created.startsWith(template.replace('XXXXXX', ''))).toBe(true);
@@ -2005,6 +2006,7 @@ describe('Codex generation (--host codex)', () => {
       cwd: ROOT,
       stdout: 'pipe',
       stderr: 'pipe',
+      timeout: 120_000,
     });
     expect(result.exitCode).toBe(0);
     const output = result.stdout.toString();
@@ -2020,11 +2022,13 @@ describe('Codex generation (--host codex)', () => {
       cwd: ROOT,
       stdout: 'pipe',
       stderr: 'pipe',
+      timeout: 120_000,
     });
     const agentsResult = Bun.spawnSync(['bun', 'run', 'scripts/gen-skill-docs.ts', '--host', 'agents', '--dry-run', '--out-dir', EXTERNAL_OUT], {
       cwd: ROOT,
       stdout: 'pipe',
       stderr: 'pipe',
+      timeout: 120_000,
     });
     expect(codexResult.exitCode).toBe(0);
     expect(agentsResult.exitCode).toBe(0);
@@ -2239,6 +2243,7 @@ describe('Codex generation (--host codex)', () => {
         cwd: ROOT,
         stdout: 'pipe',
         stderr: 'pipe',
+        timeout: 120_000,
       });
       expect(override.exitCode).toBe(0);
       const content = fs.readFileSync(path.join(overrideOut, '.agents', 'skills', 'gstack-ship', 'SKILL.md'), 'utf-8');
@@ -2357,10 +2362,10 @@ describe('Factory generation (--host factory)', () => {
 
   test('--host droid alias works', () => {
     const factoryResult = Bun.spawnSync(['bun', 'run', 'scripts/gen-skill-docs.ts', '--host', 'factory', '--dry-run', '--out-dir', EXTERNAL_OUT], {
-      cwd: ROOT, stdout: 'pipe', stderr: 'pipe',
+      cwd: ROOT, stdout: 'pipe', stderr: 'pipe', timeout: 120_000,
     });
     const droidResult = Bun.spawnSync(['bun', 'run', 'scripts/gen-skill-docs.ts', '--host', 'droid', '--dry-run', '--out-dir', EXTERNAL_OUT], {
-      cwd: ROOT, stdout: 'pipe', stderr: 'pipe',
+      cwd: ROOT, stdout: 'pipe', stderr: 'pipe', timeout: 120_000,
     });
     expect(factoryResult.exitCode).toBe(0);
     expect(droidResult.exitCode).toBe(0);
@@ -2369,7 +2374,7 @@ describe('Factory generation (--host factory)', () => {
 
   test('--host factory --dry-run freshness', () => {
     const result = Bun.spawnSync(['bun', 'run', 'scripts/gen-skill-docs.ts', '--host', 'factory', '--dry-run', '--out-dir', EXTERNAL_OUT], {
-      cwd: ROOT, stdout: 'pipe', stderr: 'pipe',
+      cwd: ROOT, stdout: 'pipe', stderr: 'pipe', timeout: 120_000,
     });
     expect(result.exitCode).toBe(0);
     const output = result.stdout.toString();
@@ -2447,7 +2452,7 @@ describe('Parameterized host smoke tests', () => {
       test('--dry-run freshness check passes', () => {
         const result = Bun.spawnSync(
           ['bun', 'run', 'scripts/gen-skill-docs.ts', '--host', hostConfig.name, '--dry-run', '--out-dir', EXTERNAL_OUT],
-          { cwd: ROOT, stdout: 'pipe', stderr: 'pipe' }
+          { cwd: ROOT, stdout: 'pipe', stderr: 'pipe', timeout: 120_000 }
         );
         expect(result.exitCode).toBe(0);
         const output = result.stdout.toString();
@@ -2472,7 +2477,7 @@ describe('--host all', () => {
   // claude host plus every external host regenerate deterministically.
   test('--host all generates for all registered hosts', () => {
     const result = Bun.spawnSync(['bun', 'run', 'scripts/gen-skill-docs.ts', '--host', 'all', '--dry-run', '--out-dir', EXTERNAL_OUT], {
-      cwd: ROOT, stdout: 'pipe', stderr: 'pipe',
+      cwd: ROOT, stdout: 'pipe', stderr: 'pipe', timeout: 120_000,
     });
     expect(result.exitCode).toBe(0);
     const output = result.stdout.toString();
