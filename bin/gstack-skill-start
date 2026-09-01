@@ -239,14 +239,37 @@ if [ -f "$_GBRAIN_CONFIG" ] && command -v gbrain >/dev/null 2>&1; then
       _GBRAIN_PIN_PATH="$_REPO_TOP/.gbrain-source"
     fi
     if [ -n "$_GBRAIN_PIN_PATH" ]; then
+	  _GBRAIN_READY_BIN="$_BIN/gstack-gbrain-ready"
+	  if [ -x "$_GBRAIN_READY_BIN" ]; then
+	    _GBRAIN_READY_OUTPUT=$("$_GBRAIN_READY_BIN" --check-only --session-key "$PARENT_PID" 2>/dev/null || echo "GBRAIN_GRAPH: degraded | reason=bootstrap_failed")
+	    echo "$_GBRAIN_READY_OUTPUT"
+	    case "$_GBRAIN_READY_OUTPUT" in
+	      *"GBRAIN_GRAPH: ready"*) ;;
+	      *"GBRAIN_GRAPH: partial"*) ;;
+	      *"reason=repair_cooldown"*) ;;
+	      *)
+	        (cd "$_REPO_TOP" 2>/dev/null && "$_GBRAIN_READY_BIN" >/dev/null 2>&1) &
+	        ;;
+	    esac
+	  fi
       echo "GBrain configured. Prefer \`gbrain search\`/\`gbrain query\` over Grep for"
       echo "semantic questions; use \`gbrain code-def\`/\`code-refs\`/\`code-callers\` for"
       echo "symbol-aware code lookup. See \"## GBrain Search Guidance\" in CLAUDE.md."
-      echo "Run /sync-gbrain to refresh."
+      case "$_GBRAIN_READY_OUTPUT" in
+	    *"GBRAIN_GRAPH: ready"*) echo "GBrain graph certified for this worktree." ;;
+	    *"GBRAIN_GRAPH: partial"*) echo "GBrain graph is useful but non-authoritative; verify impact with repository lookup." ;;
+	    *) echo "GBrain graph is degraded; use repository lookup until automatic repair certifies it." ;;
+	  esac
     else
-      echo "GBrain configured but this worktree isn't pinned yet. Run \`/sync-gbrain --full\`"
-      echo "before relying on \`gbrain search\` for code questions in this worktree."
-      echo "Falls back to Grep until pinned."
+	  _GBRAIN_READY_BIN="$_BIN/gstack-gbrain-ready"
+	  if [ -x "$_GBRAIN_READY_BIN" ]; then
+	    _GBRAIN_READY_OUTPUT=$("$_GBRAIN_READY_BIN" --check-only --session-key "$PARENT_PID" 2>/dev/null || echo "GBRAIN_GRAPH: degraded | reason=bootstrap_failed")
+	    echo "$_GBRAIN_READY_OUTPUT"
+	    (cd "$_REPO_TOP" 2>/dev/null && "$_GBRAIN_READY_BIN" >/dev/null 2>&1) &
+	  else
+	    echo "GBRAIN_GRAPH: degraded | reason=bootstrap_unavailable"
+	  fi
+	  echo "This worktree is not yet certified; use repository lookup while automatic bootstrap runs."
     fi
   fi
 fi

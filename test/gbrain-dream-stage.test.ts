@@ -253,8 +253,10 @@ describe("classifyDreamOutcome — post-flight truth guard", () => {
     expect(classifyDreamOutcome(LOG.builtEdges)).toBeNull();
   });
 
-  it("returns null when no recognizable signal is present (degrade to success)", () => {
-    expect(classifyDreamOutcome(LOG.noEdgeLine)).toBeNull();
+  it("fails closed when no resolver completion signal is present", () => {
+    const warning = classifyDreamOutcome(LOG.noEdgeLine);
+    expect(warning).not.toBeNull();
+    expect(warning).toContain("readiness is unknown");
   });
 });
 

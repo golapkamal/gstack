@@ -1391,8 +1391,8 @@ export async function runDream(args: CliArgs): Promise<StageResult> {
       ok: true,
       duration_ms: 0,
       summary: sourceId
-        ? `would: gbrain dream --source ${sourceId}  (build this source's call graph)`
-        : "would: gbrain dream  (call-graph build)",
+        ? `would: gbrain dream --source ${sourceId} --phase resolve_symbol_edges  (build this source's call graph)`
+        : "would: gbrain dream --phase resolve_symbol_edges  (call-graph build)",
     };
   }
 
@@ -1423,17 +1423,16 @@ export async function runDream(args: CliArgs): Promise<StageResult> {
       DEFAULT_DREAM_TIMEOUT_MS,
     );
 
-    // Scope the cycle to THIS worktree's code source: `gbrain dream --source <id>`.
-    // Verified empirically (not just from `gbrain --help`): plain `gbrain dream`
-    // cycles the brain's default source and never runs the source-scoped `extract`
-    // phase for our code source, so the call graph for the pinned source stays
-    // empty. `gbrain dream --source <id>` runs the per-source cycle (the form
-    // `gbrain doctor` recommends for stale sources) and is what actually populates
-    // code-callers/code-callees for this worktree. Falls back to plain `dream`
-    // only when we can't derive the source id (not in a git repo).
+    // Explicitly request the global resolver phase. Current gbrain intentionally
+    // excludes global phases from an implicit non-default source cycle, so bare
+    // `dream --source <id>` can exit 0 without ever resolving symbol edges.
+    // Keeping --source still binds the receipt to this worktree; --phase is the
+    // load-bearing proof that the call-graph phase actually ran.
     const root = repoRoot();
     const sourceId = root ? resolveCodeSourceId(root, gbrainEnv) : null;
-    const dreamArgs = sourceId ? ["dream", "--source", sourceId] : ["dream"];
+    const dreamArgs = sourceId
+      ? ["dream", "--source", sourceId, "--phase", "resolve_symbol_edges"]
+      : ["dream", "--phase", "resolve_symbol_edges"];
 
     // spawnGbrain seeds DATABASE_URL from gbrain's config via buildGbrainEnv.
     //
@@ -1586,6 +1585,9 @@ export function classifyDreamOutcome(out: string): string | null {
   // Cycle ran and embedded fine, but matched zero call-graph edges.
   if (parseResolvedEdges(out) === 0) {
     return "dream ran but resolved 0 call-graph edges (no code symbols matched for this source yet).";
+  }
+  if (parseResolvedEdges(out) === null) {
+    return "dream exited successfully but did not prove resolve_symbol_edges completed; call-graph readiness is unknown.";
   }
   return null;
 }

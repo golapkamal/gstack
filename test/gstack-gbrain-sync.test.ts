@@ -236,7 +236,7 @@ esac
     });
 
     expect(r.status).toBe(0);
-    expect(r.stdout).toContain("gbrain dream --source client-acme-app");
+    expect(r.stdout).toContain("gbrain dream --source client-acme-app --phase resolve_symbol_edges");
     rmSync(repo, { recursive: true, force: true });
     rmSync(bindir, { recursive: true, force: true });
     rmSync(home, { recursive: true, force: true });

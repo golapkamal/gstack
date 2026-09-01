@@ -1,0 +1,222 @@
+#!/usr/bin/env bash
+# Verify that this exact worktree has a usable GBrain code graph.
+# Expensive work is cached by source + tracked-content fingerprint, so a new
+# session on an unchanged worktree pays only the cache lookup.
+
+set +e
+
+BIN_DIR=$(cd "$(dirname "$0")" 2>/dev/null && pwd)
+STATE_ROOT="${GSTACK_HOME:-$HOME/.gstack}/gbrain-readiness"
+REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+READINESS_SCHEMA=3
+REPAIR_COOLDOWN_SECONDS=1800
+SESSION_KEY=""
+CHECK_ONLY=false
+
+degraded() {
+  echo "GBRAIN_GRAPH: degraded | reason=$1"
+  exit 0
+}
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --session-key)
+      [ "$#" -ge 2 ] || degraded "missing_session_key"
+      SESSION_KEY=$(printf '%s' "$2" | tr -cd 'A-Za-z0-9._-')
+      shift 2
+      ;;
+    --check-only)
+      CHECK_ONLY=true
+      shift
+      ;;
+    *)
+      degraded "unknown_argument"
+      ;;
+  esac
+done
+
+run_code_sync() {
+  _sync_bin="$BIN_DIR/gstack-gbrain-sync.ts"
+  [ -f "$_sync_bin" ] || return 1
+  command -v bun >/dev/null 2>&1 || return 1
+  if command -v gtimeout >/dev/null 2>&1; then
+    (cd "$REPO_ROOT" && gtimeout 300s bun run "$_sync_bin" --code-only --dream --quiet >/dev/null 2>&1)
+  elif command -v timeout >/dev/null 2>&1; then
+    (cd "$REPO_ROOT" && timeout 300s bun run "$_sync_bin" --code-only --dream --quiet >/dev/null 2>&1)
+  else
+    (cd "$REPO_ROOT" && perl -e 'alarm shift; exec @ARGV' 300 bun run "$_sync_bin" --code-only --dream --quiet >/dev/null 2>&1)
+  fi
+}
+
+[ -n "$REPO_ROOT" ] || degraded "not_a_git_worktree"
+command -v gbrain >/dev/null 2>&1 || degraded "gbrain_unavailable"
+command -v jq >/dev/null 2>&1 || degraded "jq_unavailable"
+if [ ! -f "$REPO_ROOT/.gbrain-source" ]; then
+  [ "$CHECK_ONLY" = "false" ] || degraded "source_pin_missing"
+  run_code_sync || degraded "source_bootstrap_failed"
+fi
+[ -f "$REPO_ROOT/.gbrain-source" ] || degraded "source_pin_missing_after_bootstrap"
+
+SOURCE_ID=$(tr -d '[:space:]' < "$REPO_ROOT/.gbrain-source" 2>/dev/null)
+[ -n "$SOURCE_ID" ] || degraded "source_pin_empty"
+
+HEAD_SHA=$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null)
+TRACKED_DIFF=$(git -C "$REPO_ROOT" diff --no-ext-diff --binary HEAD 2>/dev/null | shasum | awk '{print $1}')
+UNTRACKED_CODE_HASH=$(
+  git -C "$REPO_ROOT" ls-files --others --exclude-standard -z 2>/dev/null |
+    while IFS= read -r -d '' _path; do
+      if printf '%s\n' "$_path" | grep -Eq '\.(js|jsx|mjs|cjs|ts|tsx|py|rb|go|rs|java|kt|kts|swift|c|cc|cpp|h|hpp)$'; then
+        printf '%s\n' "$_path"
+        shasum < "$REPO_ROOT/$_path" 2>/dev/null
+      fi
+    done | shasum | awk '{print $1}'
+)
+FINGERPRINT=$(printf '%s\n%s\n%s\n%s\n%s\n' "$READINESS_SCHEMA" "$SOURCE_ID" "$HEAD_SHA" "$TRACKED_DIFF" "$UNTRACKED_CODE_HASH" | shasum | awk '{print $1}')
+mkdir -p "$STATE_ROOT" 2>/dev/null
+SESSION_FILE=""
+if [ -n "$SESSION_KEY" ]; then
+  SESSION_FILE="$STATE_ROOT/session-${SESSION_KEY}-${FINGERPRINT}.partial"
+  if [ -f "$SESSION_FILE" ]; then
+    CANARY=$(head -1 "$SESSION_FILE" 2>/dev/null | tr -cd 'A-Za-z0-9_$')
+    echo "GBRAIN_GRAPH: partial | source=$SOURCE_ID | canary=${CANARY:-verified} | session=certified"
+    exit 0
+  fi
+fi
+
+SOURCES_JSON=$(cd "$REPO_ROOT" && gbrain sources list --json 2>/dev/null)
+SOURCE_PATH=$(printf '%s' "$SOURCES_JSON" | jq -r --arg id "$SOURCE_ID" '.sources[]? | select(.id == $id) | .local_path // empty' 2>/dev/null)
+[ -n "$SOURCE_PATH" ] || degraded "source_not_registered"
+SOURCE_REAL=$(cd "$SOURCE_PATH" 2>/dev/null && pwd -P)
+REPO_REAL=$(cd "$REPO_ROOT" 2>/dev/null && pwd -P)
+[ "$SOURCE_REAL" = "$REPO_REAL" ] || degraded "source_path_mismatch"
+
+CACHE_FILE="$STATE_ROOT/${SOURCE_ID}-${FINGERPRINT}.partial"
+# Readiness evidence is fingerprint-specific, but repair budget is source-wide:
+# the resolver phase is brain-global and must not relaunch after every edit.
+ATTEMPT_FILE="$STATE_ROOT/${SOURCE_ID}.attempted-at"
+# Upgrade compatibility: preserve the newest cooldown receipt written by the
+# earlier fingerprint-scoped implementation, so installing this fix cannot
+# immediately repeat a resolver that just finished.
+if [ ! -f "$ATTEMPT_FILE" ]; then
+	LATEST_LEGACY_ATTEMPT=""
+	for LEGACY_ATTEMPT_FILE in "$STATE_ROOT/${SOURCE_ID}-"*.attempted-at; do
+		[ -f "$LEGACY_ATTEMPT_FILE" ] || continue
+		LEGACY_ATTEMPT=$(cat "$LEGACY_ATTEMPT_FILE" 2>/dev/null)
+		case "$LEGACY_ATTEMPT" in
+		  ''|*[!0-9]*) continue ;;
+		esac
+		if [ -z "$LATEST_LEGACY_ATTEMPT" ] || [ "$LEGACY_ATTEMPT" -gt "$LATEST_LEGACY_ATTEMPT" ]; then
+			LATEST_LEGACY_ATTEMPT="$LEGACY_ATTEMPT"
+		fi
+	done
+	[ -z "$LATEST_LEGACY_ATTEMPT" ] || printf '%s\n' "$LATEST_LEGACY_ATTEMPT" > "$ATTEMPT_FILE"
+fi
+CACHE_HIT=false
+CANARY=""
+if [ -f "$CACHE_FILE" ]; then
+  CACHE_HIT=true
+  CANARY=$(head -1 "$CACHE_FILE" 2>/dev/null | tr -cd 'A-Za-z0-9_$')
+fi
+
+LOCK_DIR="$STATE_ROOT/${SOURCE_ID}.lock"
+if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+	LOCK_PID=$(cat "$LOCK_DIR/pid" 2>/dev/null)
+	if [ -n "$LOCK_PID" ] && kill -0 "$LOCK_PID" 2>/dev/null; then
+	  degraded "bootstrap_in_progress"
+	fi
+	# A killed session must not leave every future session permanently degraded.
+	rm -f "$LOCK_DIR/pid" 2>/dev/null
+	rmdir "$LOCK_DIR" 2>/dev/null || degraded "bootstrap_lock_stale_but_not_empty"
+	mkdir "$LOCK_DIR" 2>/dev/null || degraded "bootstrap_lock_contested"
+fi
+echo "$$" > "$LOCK_DIR/pid" 2>/dev/null
+trap 'rm -f "$LOCK_DIR/pid" 2>/dev/null; rmdir "$LOCK_DIR" 2>/dev/null' EXIT
+
+REPO_KEY=$(git -C "$REPO_ROOT" remote get-url origin 2>/dev/null | shasum | awk '{print $1}')
+CANARY_FILE="$STATE_ROOT/repo-${REPO_KEY}.canary"
+[ -n "$CANARY" ] || CANARY=$(head -1 "$CANARY_FILE" 2>/dev/null | tr -cd 'A-Za-z0-9_$')
+
+check_canary() {
+  _symbol="$1"
+  [ -n "$_symbol" ] || return 1
+  _def=$(cd "$REPO_ROOT" && gbrain code-def "$_symbol" --json 2>/dev/null)
+  [ "$(printf '%s' "$_def" | jq -r '.ready == true and .count == 1' 2>/dev/null)" = "true" ] || return 1
+  _callers=$(cd "$REPO_ROOT" && gbrain code-callers "$_symbol" --json 2>/dev/null)
+  [ "$(printf '%s' "$_callers" | jq -r '.ready == true and .count > 0' 2>/dev/null)" = "true" ] || return 1
+
+  _init=$(jq -nc '{jsonrpc:"2.0",id:1,method:"initialize",params:{protocolVersion:"2025-03-26",capabilities:{},clientInfo:{name:"gstack-graph-canary",version:"1"}}}')
+  _ready='{"jsonrpc":"2.0","method":"notifications/initialized","params":{}}'
+  _call=$(jq -nc --arg symbol "$_symbol" --arg source "$SOURCE_ID" '{jsonrpc:"2.0",id:2,method:"tools/call",params:{name:"code_blast",arguments:{symbol:$symbol,source_id:$source,depth:2}}}')
+  _blast=$(cd "$REPO_ROOT" && { printf '%s\n' "$_init" "$_ready" "$_call"; } | gbrain serve --surface full 2>/dev/null | jq -r 'select(.id == 2) | .result.content[0].text' 2>/dev/null | jq -c '.' 2>/dev/null)
+  [ "$(printf '%s' "$_blast" | jq -r '.ready == true and .result == "ok" and ([.depth_groups[]?.nodes[]?] | length) > 0' 2>/dev/null)" = "true" ] || return 1
+  return 0
+}
+
+# A cached or repo-known canary is only a performance hint, never authority.
+# Re-run it before the repair cooldown so a healthy graph can certify a new
+# worktree fingerprint without waiting 30 minutes or launching another dream.
+if [ -n "$CANARY" ] && check_canary "$CANARY"; then
+  [ -n "$SESSION_FILE" ] && printf '%s\n' "$CANARY" > "$SESSION_FILE"
+  printf '%s\n' "$CANARY" > "$CACHE_FILE"
+  echo "GBRAIN_GRAPH: partial | source=$SOURCE_ID | canary=$CANARY | cache=$CACHE_HIT"
+  exit 0
+fi
+rm -f "$CACHE_FILE" 2>/dev/null
+
+# A partial upstream graph must not turn every skill invocation into another
+# multi-minute global resolver cycle. One repair attempt per source every 30
+# minutes is enough even as HEAD/diffs change; repository lookup remains the
+# safe fallback.
+NOW_EPOCH=$(date +%s)
+LAST_ATTEMPT=$(cat "$ATTEMPT_FILE" 2>/dev/null)
+case "$LAST_ATTEMPT" in
+  ''|*[!0-9]*) ;;
+  *)
+    ATTEMPT_AGE=$((NOW_EPOCH - LAST_ATTEMPT))
+    [ "$ATTEMPT_AGE" -ge "$REPAIR_COOLDOWN_SECONDS" ] || degraded "repair_cooldown"
+    ;;
+esac
+
+# Startup checks must stay bounded. Repair is launched separately by the host
+# adapter so a cold or degraded graph never adds minutes to the user's first
+# interaction.
+[ "$CHECK_ONLY" = "false" ] || degraded "not_certified"
+
+# Keep the steady-state repair path code-only. Memory/document ingestion is a
+# different workload and must never be pulled into code-graph readiness.
+printf '%s\n' "$NOW_EPOCH" > "$ATTEMPT_FILE"
+run_code_sync || degraded "code_sync_failed_or_timed_out"
+
+if ! check_canary "$CANARY"; then
+  CANARY=""
+	EXPORTS_FILE=$(mktemp "${TMPDIR:-/tmp}/gstack-gbrain-exports-XXXXXX" 2>/dev/null)
+	CANDIDATES_FILE=$(mktemp "${TMPDIR:-/tmp}/gstack-gbrain-candidates-XXXXXX" 2>/dev/null)
+	git -C "$REPO_ROOT" grep -h -oE 'export (async )?function [A-Za-z_$][A-Za-z0-9_$]*' -- '*.ts' '*.tsx' 2>/dev/null \
+	  | awk '{print $NF}' | sort -u > "$EXPORTS_FILE"
+	# Rank exported functions by real textual use. This makes cold discovery try
+	# likely call-graph canaries first instead of paying one DB round-trip for
+	# every alphabetically early declaration.
+	git -C "$REPO_ROOT" grep -h -oE '[A-Za-z_$][A-Za-z0-9_$]*[[:space:]]*\(' -- '*.ts' '*.tsx' 2>/dev/null \
+	  | sed -E 's/[[:space:]]*\($//' | sort | uniq -c | sort -rn \
+	  | while read -r _count _name; do
+	      grep -Fqx "$_name" "$EXPORTS_FILE" 2>/dev/null && printf '%s\n' "$_name"
+	    done | head -8 > "$CANDIDATES_FILE"
+  while IFS= read -r candidate; do
+    [ -n "$candidate" ] || continue
+    if check_canary "$candidate"; then
+      CANARY="$candidate"
+      break
+    fi
+  done < "$CANDIDATES_FILE"
+	rm -f "$EXPORTS_FILE" "$CANDIDATES_FILE" 2>/dev/null
+fi
+
+[ -n "$CANARY" ] || degraded "no_graph_canary"
+printf '%s\n' "$CANARY" > "$CANARY_FILE"
+printf '%s\n' "$CANARY" > "$CACHE_FILE"
+[ -n "$SESSION_FILE" ] && printf '%s\n' "$CANARY" > "$SESSION_FILE"
+# A successful canary proves that some graph queries work for this exact
+# worktree. It does NOT prove source-wide completeness: unrelated unresolved or
+# ambiguous edges may still exist. Until gbrain exposes a source-wide coverage
+# receipt, this state is deliberately partial and never authoritative.
+echo "GBRAIN_GRAPH: partial | source=$SOURCE_ID | canary=$CANARY | cache=miss"

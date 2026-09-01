@@ -184,6 +184,13 @@ describe('gstack-session-update', () => {
     });
     expect(result.exitCode).toBe(0);
   });
+
+  test('bootstraps GBrain readiness independently from auto-upgrade', () => {
+    const script = fs.readFileSync(SESSION_UPDATE, 'utf8');
+    expect(script).toContain('gstack-gbrain-ready');
+    expect(script).toContain('SESSION_WORKDIR');
+    expect(script).toContain('backgrounded and non-fatal');
+  });
 });
 
 describe('gstack-team-init', () => {
