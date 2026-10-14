@@ -68,10 +68,10 @@ jobs:
       # Registry cache export needs a docker-container builder — the default
       # `docker` driver hard-errors on cache-to (first live run of the trio).
       - if: steps.check.outputs.exists == 'false'
-        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
 
       - if: steps.check.outputs.exists == 'false'
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: .github/docker
           file: .github/docker/Dockerfile.ci
@@ -195,7 +195,7 @@ jobs:
       - name: Register gstack skills for PTY smokes
         uses: ./.github/actions/register-gstack-skills
 
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: paid-plan
           path: /tmp/paid-plan
@@ -265,12 +265,12 @@ jobs:
 
       - run: bun install --frozen-lockfile
 
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: paid-plan
           path: /tmp/paid-report
 
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           pattern: paid-slice-[0-9]*
           path: /tmp/paid-report
@@ -315,13 +315,13 @@ jobs:
       # `issues` permission, not `pull-requests` (#1802 CI fix).
       issues: write
     steps:
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           pattern: paid-slice-[0-9]*
           path: /tmp/paid-report
           merge-multiple: true
 
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: report-verdict
           path: /tmp/verdict
